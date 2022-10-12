@@ -57,38 +57,46 @@ def normalize(train, *others):
     train = scaler.fit_transform(train)
     return train, *[scaler.transform(x) if x.size > 0 else x for x in others], scaler
 
-def create_ts(X, y, lags, horizon, stride, val_size, test_size, data_preprocess="normalize", rate=1):
+def create_ts(X, y, lags, horizon, stride, val_size, test_size, data_preprocess=("log_returns", "normalize"), rate=1, scaler=None):
     """
     Full pipeline of building train / val / test parts
     """
-    if data_preprocess == "log_returns":
-        X = log_returns(X)
-        y = log_returns(y)
-    X, y = build_ts_X_y(X, y, lags=lags, horizon=horizon, stride=stride)
-
-    (X_train, X_val, X_test), (y_train, y_val, y_test) = split_data(X.reshape((X.shape[0], - 1)), y.reshape((len(X), - 1)), val_size=val_size, test_size=test_size, rate=rate)
-    if data_preprocess == "normalize":
-        X_train, X_val, X_test, std_scaler_X = normalize(X_train, X_val, X_test)
-        y_train, y_val, y_test, std_scaler_y = normalize(y_train, y_val, y_test)
-    else:
-        std_scaler_X = std_scaler_y = None
-    
-    return (X_train, y_train), (X_val, y_val), (X_test, y_test), std_scaler_X, std_scaler_y
-
-def create_ts_dl(X, y, lags, horizon, stride, batch_size, device, val_size, test_size, data_preprocess="normalize", drop_last=False, rate=1):
-    """
-    Full pipeline of building train / val / test torch dataloaders
-        from original numpy arrays
-    """
-    if data_preprocess == "log_returns":
+    if "log_returns" in data_preprocess:
         X = log_returns(X)
         y = log_returns(y)
     X, y = build_ts_X_y(X, y, lags=lags, horizon=horizon, stride=stride)
 
     (X_train, X_val, X_test), (y_train, y_val, y_test) = split_data(X, y.reshape((len(X), - 1)), val_size=val_size, test_size=test_size, rate=rate)
-    if data_preprocess == "normalize":
-        X_train, X_val, X_test, std_scaler_X = normalize(X_train, X_val, X_test)
-        y_train, y_val, y_test, std_scaler_y = normalize(y_train, y_val, y_test)
+    if "normalize" in data_preprocess:
+        if scaler is None:
+            X_train, X_val, X_test, std_scaler_X = normalize(X_train, X_val, X_test)
+            y_train, y_val, y_test, std_scaler_y = normalize(y_train, y_val, y_test)
+        else:
+            X_train, X_val, X_test, y_train, y_val, y_test = map(scaler.transform, (X_train, X_val, X_test, y_train, y_val, y_test))
+            std_scaler_X = std_scaler_y = scaler
+    else:
+        std_scaler_X = std_scaler_y = None
+    
+    return (X_train, y_train), (X_val, y_val), (X_test, y_test), std_scaler_X, std_scaler_y
+
+def create_ts_dl(X, y, lags, horizon, stride, batch_size, device, val_size, test_size, data_preprocess=("log_returns", "normalize"), drop_last=False, rate=1, scaler=None):
+    """
+    Full pipeline of building train / val / test torch dataloaders
+        from original numpy arrays
+    """
+    if "log_returns" in data_preprocess:
+        X = log_returns(X)
+        y = log_returns(y)
+    X, y = build_ts_X_y(X, y, lags=lags, horizon=horizon, stride=stride)
+
+    (X_train, X_val, X_test), (y_train, y_val, y_test) = split_data(X, y.reshape((len(X), - 1)), val_size=val_size, test_size=test_size, rate=rate)
+    if "normalize" in data_preprocess:
+        if scaler is None:
+            X_train, X_val, X_test, std_scaler_X = normalize(X_train, X_val, X_test)
+            y_train, y_val, y_test, std_scaler_y = normalize(y_train, y_val, y_test)
+        else:
+            X_train, X_val, X_test, y_train, y_val, y_test = map(scaler.transform, (X_train, X_val, X_test, y_train, y_val, y_test))
+            std_scaler_X = std_scaler_y = scaler
     else:
         std_scaler_X = std_scaler_y = None
     X_train, X_val, X_test, y_train, y_val, y_test = map(lambda x: torch.from_numpy(x).float().to(device), (X_train, X_val, X_test, y_train, y_val, y_test))
