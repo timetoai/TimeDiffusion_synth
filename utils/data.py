@@ -1,4 +1,5 @@
 from pathlib import Path
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -22,6 +23,38 @@ def get_hsm_dataset(dataset_path, selected_files=None):
         for filename in selected_files:
             file = list(dataset_path.glob(f"*/{filename}"))[0]
             yield pd.read_csv(file, usecols=["Close"])
+
+def get_solar_energy_dataset(dataset_path, max_results=10):
+    dataset_path = Path(dataset_path) / "al-pv-2006"
+    for path in dataset_path.glob("*Actual*"):
+        yield pd.read_csv(path, usecols=["Power(MW)"])
+        max_results -= 1
+        if max_results == 0:
+            break
+
+def get_fuel_prices_dataset(dataset_path):
+    dataset_path = Path(dataset_path)
+    df = pd.read_csv(dataset_path / "weekly_fuel_prices_all_data_from_2005_to_20210823.csv")
+    missing = set((4, 7))
+    for i in range(1, 9):
+        if i not in missing:
+            yield df[df.product_id == i].sort_values("survey_date")[["price"]]
+
+    df = pd.read_csv(dataset_path / "Weekly Fuel Prices.csv").sort_values("Date")
+    for col in ("Petrol (USD)", "Diesel (USD)"):
+        yield df[[col]]
+
+def get_passengers_dataset(dataset_path, max_results=50):
+    dataset_path = Path(dataset_path)
+    df = pd.read_csv(dataset_path / "US Monthly Air Passengers.csv")
+    with open(dataset_path / "cities", "rb") as f:
+        cities = pickle.load(f)
+        
+    for city in cities[:max_results]:
+        yield df[df.ORIGIN_CITY_NAME == city].\
+            groupby(["YEAR", "MONTH"], as_index=False).agg(passengers=("Sum_PASSENGERS", "sum")).\
+                sort_values(["YEAR", "MONTH"])[["passengers"]]
+
 
 def log_returns(series: pd.Series) -> pd.Series:
     """
