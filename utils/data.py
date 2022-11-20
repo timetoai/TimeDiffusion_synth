@@ -55,12 +55,30 @@ def get_passengers_dataset(dataset_path, max_results=50):
             groupby(["YEAR", "MONTH"], as_index=False).agg(passengers=("Sum_PASSENGERS", "sum")).\
                 sort_values(["YEAR", "MONTH"])[["passengers"]]
 
+def get_dataset_iterator(dataset_name, dataset_path):
+    if dataset_name == "hsm":
+        ts_iterator = get_hsm_dataset(dataset_path, selected_files=f"{dataset_path}/selected100.csv")
+    elif dataset_name == "se":
+        ts_iterator = get_solar_energy_dataset(dataset_path, max_results=10)
+    elif dataset_name == "fp":
+        ts_iterator = get_fuel_prices_dataset(dataset_path)
+    else:
+        ts_iterator = get_passengers_dataset(dataset_path)
+    return ts_iterator
+
+def moving_average(x, w):
+    return np.convolve(x, np.ones(w), 'valid') / w
 
 def log_returns(series: pd.Series) -> pd.Series:
     """
     Takes pandas.Series as input and returns it in `log returns` format
     """
     return np.log(series / series.shift(1)).fillna(0)
+
+def inverse_log_returns(time_series, start_value: int):
+    ts = np.exp(time_series)
+    ts[0] = start_value
+    return ts.cumprod()
 
 def build_ts_X_y(X, y, lags=1, horizon=1, stride=1):
     """
@@ -143,6 +161,8 @@ def create_ts_dl(X, y, lags, horizon, stride, batch_size, device, val_size, test
 
 class DimUniversalStandardScaler:
     def fit(self, data):
+        if isinstance(data, pd.DataFrame):
+            data = data.values
         self.mu = np.mean(data)
         self.std = np.std(data)
     
