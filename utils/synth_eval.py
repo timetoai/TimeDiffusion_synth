@@ -29,7 +29,7 @@ def eval_sim(dataset_names, dataset_paths, model_name, save=True, results_dir=No
         if dataset_name == "hsm":
             ts_iterator = get_hsm_dataset(dataset_path, selected_files=f"{dataset_path}/selected100.csv")
         elif dataset_name == "se":
-            ts_iterator = get_solar_energy_dataset(dataset_path, max_results=10)
+            ts_iterator = get_solar_energy_dataset(dataset_path)
         elif dataset_name == "fp":
             ts_iterator = get_fuel_prices_dataset(dataset_path)
         else:
@@ -38,7 +38,7 @@ def eval_sim(dataset_names, dataset_paths, model_name, save=True, results_dir=No
         for ts_index, time_series in tqdm(enumerate(ts_iterator)):
             
             # train_ts = log_returns(time_series[:10_000]).values.flatten()
-            train_ts = time_series[:10_000].values.flatten()
+            train_ts = time_series.values.flatten()
             if "RealNVP" in model_name or "Flow" in model_name:
                 train_ts = train_ts[:(len(train_ts) // 4 * 4 + 1 if len(train_ts) % 4 > 0 else len(train_ts) - 3)]
             # train_ts = min_max_norm(train_ts)
@@ -51,10 +51,12 @@ def eval_sim(dataset_names, dataset_paths, model_name, save=True, results_dir=No
                     # synth_ts = min_max_norm(synth_ts)
                     if len(synth_ts) < len(train_ts):
                         for i in range(0, len(train_ts) // len(synth_ts) * len(synth_ts), len(synth_ts)):
-                            kl_div_res.append(kl_div(synth_ts, train_ts[i: i + len(synth_ts)]).mean())
+                            res = kl_div(synth_ts, train_ts[i: i + len(synth_ts)])
+                            if len(res) > 0: kl_div_res.append(res.mean())
                             p_val.append(kstest(synth_ts, train_ts[i: i + len(synth_ts)])[1])
                     else:
-                        kl_div_res.append(kl_div(synth_ts, train_ts[:len(synth_ts)]).mean())
+                        res = kl_div(synth_ts, train_ts[:len(synth_ts)])
+                        if len(res) > 0: kl_div_res.append(res.mean())
                         p_val.append(kstest(synth_ts[:len(train_ts)], train_ts)[1])
                 results["kl_div"].append(np.mean(kl_div_res))
                 results["kstest_pval"].append(np.mean(p_val))
@@ -133,7 +135,7 @@ def eval_autoreg_model_synth(dataset_names, dataset_paths, synth_model_name, mod
     test_size = 0.3
     verbose = False
     drop_last = False
-    ds_lens = {"hsm": 100, "se": 10, "fp": 8, "ap": 50}
+    ds_lens = {"hsm": 100, "se": 30, "fp": 8, "ap": 50}
 
     for dataset_name, dataset_path in zip(dataset_names, dataset_paths):
         if dataset_name == "se":
@@ -145,8 +147,13 @@ def eval_autoreg_model_synth(dataset_names, dataset_paths, synth_model_name, mod
         for ts_index in tqdm(range(ds_lens[dataset_name])):
             synth_time_series = np.load(synth_path / f"selected{ts_index}.npy")
             results.append(0)
-            num_synth_samples = min(10 if synth_model_name in ("TTS_GAN", "QuantGAN") else 4, synth_time_series.shape[0])
-            for i in range(num_synth_samples):
+            if synth_model_name == "TimeDiffusion2":
+                num_synth_samples = 4
+                synth_range = [0, 5, 10, 15]
+            else:
+                num_synth_samples = min(10 if synth_model_name in ("TTS_GAN", "QuantGAN") else 4, synth_time_series.shape[0])
+                synth_range = range(num_synth_samples)
+            for i in synth_range:
                 train_dl, _, test_dl, X_scaler, y_scaler = create_ts_dl(synth_time_series[i].reshape(- 1, 1), synth_time_series[i].flatten(), lags=lags, horizon=horizon, stride=stride,\
                                                     batch_size=batch_size, device=device, data_preprocess=("normalize",),\
                                                     val_size=val_size, test_size=test_size, drop_last=drop_last)
