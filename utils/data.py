@@ -24,10 +24,10 @@ def get_hsm_dataset(dataset_path, selected_files=None):
             file = list(dataset_path.glob(f"*/{filename}"))[0]
             yield pd.read_csv(file, usecols=["Close"])
 
-def get_solar_energy_dataset(dataset_path, max_results=30):
+def get_solar_energy_dataset(dataset_path, max_results=10):
     dataset_path = Path(dataset_path) / "al-pv-2006"
     for path in dataset_path.glob("*Actual*"):
-        yield pd.read_csv(path, usecols=["Power(MW)"]).iloc[:3000]
+        yield pd.read_csv(path, usecols=["Power(MW)"]).iloc[:10_000]
         max_results -= 1
         if max_results == 0:
             break

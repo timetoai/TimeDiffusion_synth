@@ -13,9 +13,21 @@ from .metrics import MAE
 from .data import get_hsm_dataset, get_solar_energy_dataset, get_fuel_prices_dataset, get_passengers_dataset,\
      log_returns, get_dataset_iterator, create_ts_dl
 
-kl_div = lambda x, y: np.array([x for x in scipy_kl_div(x, y) if not np.isinf(x) and not np.isnan(x)])
-js_div = lambda x, y: (kl_div(x, (x + y) / 2) + kl_div(y, (x + y) / 2)) / 2
-min_max_norm = lambda x: (x - x.min()) / (x.max() - x.min())
+
+def min_max_norm(arr):
+    arr_max, arr_min = arr.max(), arr.min()
+    if arr_max == arr_min:
+        return np.ones_like(arr) * arr_min
+    return (arr - arr_min) / (arr_max - arr_min)
+
+def kl_div(x, y):
+    x, y = map(min_max_norm, (x, y))
+    return scipy_kl_div(x, y)
+    
+def js_div(x, y):
+    x, y = (map(min_max_norm, (x, y)))
+    x_y = (x + y) / 2
+    return (scipy_kl_div(x, x_y) + scipy_kl_div(y, x_y)) / 2
 
 def eval_sim(dataset_names, dataset_paths, model_name, save=True, results_dir=None):
     """"
@@ -25,7 +37,7 @@ def eval_sim(dataset_names, dataset_paths, model_name, save=True, results_dir=No
     for ds_ind, (dataset_path, dataset_name) in enumerate(zip(dataset_paths, dataset_names)):
         print(f"processing {dataset_name} dataset")
         synthetic_path = dataset_path / f"synthetic/{model_name}/"
-        results = {"kl_div": [], "kstest_pval": []}
+        results = {"js_div": [], "kstest_pval": []}
         if dataset_name == "hsm":
             ts_iterator = get_hsm_dataset(dataset_path, selected_files=f"{dataset_path}/selected100.csv")
         elif dataset_name == "se":
@@ -45,23 +57,23 @@ def eval_sim(dataset_names, dataset_paths, model_name, save=True, results_dir=No
             
             synth_tss = np.load(synthetic_path / f"selected{ts_index}.npy").squeeze()
             if len(synth_tss) > 0:
-                kl_div_res = []
+                js_div_res = []
                 p_val = []
                 for synth_ts in synth_tss:
                     # synth_ts = min_max_norm(synth_ts)
                     if len(synth_ts) < len(train_ts):
                         for i in range(0, len(train_ts) // len(synth_ts) * len(synth_ts), len(synth_ts)):
-                            res = kl_div(synth_ts, train_ts[i: i + len(synth_ts)])
-                            if len(res) > 0: kl_div_res.append(res.mean())
+                            res = js_div(synth_ts, train_ts[i: i + len(synth_ts)])
+                            js_div_res.append(res.mean())
                             p_val.append(kstest(synth_ts, train_ts[i: i + len(synth_ts)])[1])
                     else:
-                        res = kl_div(synth_ts, train_ts[:len(synth_ts)])
-                        if len(res) > 0: kl_div_res.append(res.mean())
+                        res = js_div(synth_ts, train_ts[:len(synth_ts)])
+                        js_div_res.append(res.mean())
                         p_val.append(kstest(synth_ts[:len(train_ts)], train_ts)[1])
-                results["kl_div"].append(np.mean(kl_div_res))
+                results["js_div"].append(np.mean(js_div_res))
                 results["kstest_pval"].append(np.mean(p_val))
             else:
-                results["kl_div"].append(1)
+                results["js_div"].append(1)
                 results["kstest_pval"].append(1)
             
         if save:
@@ -135,7 +147,7 @@ def eval_autoreg_model_synth(dataset_names, dataset_paths, synth_model_name, mod
     test_size = 0.3
     verbose = False
     drop_last = False
-    ds_lens = {"hsm": 100, "se": 30, "fp": 8, "ap": 50}
+    ds_lens = {"hsm": 100, "se": 10, "fp": 8, "ap": 50}
 
     for dataset_name, dataset_path in zip(dataset_names, dataset_paths):
         if dataset_name == "se":
