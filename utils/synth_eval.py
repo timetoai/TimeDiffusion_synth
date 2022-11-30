@@ -161,8 +161,8 @@ def eval_autoreg_model_synth(dataset_names, dataset_paths, synth_model_name, mod
         for ts_index in tqdm(range(ds_lens[dataset_name])):
             synth_time_series = np.load(synth_path / f"selected{ts_index}.npy")
             results.append(0)
-            num_synth_samples = min(20 if synth_model_name in ("TTS_GAN", "QuantGAN", "TimeDiffusion") else 4, synth_time_series.shape[0])
-            synth_range = range(num_synth_samples)
+            num_synth_samples = min(10 if synth_model_name in ("TTS_GAN", "QuantGAN", "TimeDiffusion") else 4, synth_time_series.shape[0])
+            synth_range = range(len(synth_time_series) - num_synth_samples, len(synth_time_series))
             for i in synth_range:
                 train_dl, _, test_dl, X_scaler, y_scaler = create_ts_dl(synth_time_series[i].reshape(- 1, 1), synth_time_series[i].flatten(), lags=lags, horizon=horizon, stride=stride,\
                                                     batch_size=batch_size, device=device, data_preprocess=("normalize",),\
