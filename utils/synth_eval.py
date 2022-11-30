@@ -65,11 +65,13 @@ def eval_sim(dataset_names, dataset_paths, model_name, save=True, results_dir=No
                         for i in range(0, len(train_ts) // len(synth_ts) * len(synth_ts), len(synth_ts)):
                             res = js_div(synth_ts, train_ts[i: i + len(synth_ts)])
                             js_div_res.append(res.mean())
-                            p_val.append(kstest(synth_ts, train_ts[i: i + len(synth_ts)])[1])
+                            # p_val.append(kstest(synth_ts, train_ts[i: i + len(synth_ts)])[1])
+                            p_val.append(kstest(min_max_norm(synth_ts), min_max_norm(train_ts[i: i + len(synth_ts)]))[1])
                     else:
                         res = js_div(synth_ts, train_ts[:len(synth_ts)])
                         js_div_res.append(res.mean())
-                        p_val.append(kstest(synth_ts[:len(train_ts)], train_ts)[1])
+                        # p_val.append(kstest(synth_ts[:len(train_ts)], train_ts)[1])
+                        p_val.append(kstest(min_max_norm(synth_ts[:len(train_ts)]), min_max_norm(train_ts))[1])
                 results["js_div"].append(np.mean(js_div_res))
                 results["kstest_pval"].append(np.mean(p_val))
             else:
@@ -159,12 +161,8 @@ def eval_autoreg_model_synth(dataset_names, dataset_paths, synth_model_name, mod
         for ts_index in tqdm(range(ds_lens[dataset_name])):
             synth_time_series = np.load(synth_path / f"selected{ts_index}.npy")
             results.append(0)
-            if synth_model_name == "TimeDiffusion2":
-                num_synth_samples = 4
-                synth_range = [0, 5, 10, 15]
-            else:
-                num_synth_samples = min(10 if synth_model_name in ("TTS_GAN", "QuantGAN") else 4, synth_time_series.shape[0])
-                synth_range = range(num_synth_samples)
+            num_synth_samples = min(20 if synth_model_name in ("TTS_GAN", "QuantGAN", "TimeDiffusion") else 4, synth_time_series.shape[0])
+            synth_range = range(num_synth_samples)
             for i in synth_range:
                 train_dl, _, test_dl, X_scaler, y_scaler = create_ts_dl(synth_time_series[i].reshape(- 1, 1), synth_time_series[i].flatten(), lags=lags, horizon=horizon, stride=stride,\
                                                     batch_size=batch_size, device=device, data_preprocess=("normalize",),\
