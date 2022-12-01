@@ -56,6 +56,8 @@ def eval_sim(dataset_names, dataset_paths, model_name, save=True, results_dir=No
             # train_ts = min_max_norm(train_ts)
             
             synth_tss = np.load(synthetic_path / f"selected{ts_index}.npy").squeeze()
+            if model_name == "TimeDiffusion":
+                synth_tss = synth_tss[- 2:]
             if len(synth_tss) > 0:
                 js_div_res = []
                 p_val = []
@@ -161,7 +163,8 @@ def eval_autoreg_model_synth(dataset_names, dataset_paths, synth_model_name, mod
         for ts_index in tqdm(range(ds_lens[dataset_name])):
             synth_time_series = np.load(synth_path / f"selected{ts_index}.npy")
             results.append(0)
-            num_synth_samples = min(10 if synth_model_name in ("TTS_GAN", "QuantGAN", "TimeDiffusion") else 4, synth_time_series.shape[0])
+            num_synth_samples = min(10 if synth_model_name in ("TTS_GAN", "QuantGAN") else 4, synth_time_series.shape[0])
+            if synth_model_name == "TimeDiffusion": num_synth_samples = 2
             synth_range = range(len(synth_time_series) - num_synth_samples, len(synth_time_series))
             for i in synth_range:
                 train_dl, _, test_dl, X_scaler, y_scaler = create_ts_dl(synth_time_series[i].reshape(- 1, 1), synth_time_series[i].flatten(), lags=lags, horizon=horizon, stride=stride,\
